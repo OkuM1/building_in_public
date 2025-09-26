@@ -1,3 +1,0 @@
-/home/murat/dev/Building_in_public/build/CMakeFiles/main.dir
-/home/murat/dev/Building_in_public/build/CMakeFiles/edit_cache.dir
-/home/murat/dev/Building_in_public/build/CMakeFiles/rebuild_cache.dir
