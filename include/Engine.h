@@ -2,6 +2,9 @@
 #include <GLFW/glfw3.h>
 #include <string>
 
+#include "Renderer.h"
+#include "Player.h"
+
 class Engine {
 public:
     Engine(int width, int height, const std::string& title);
@@ -17,4 +20,6 @@ private:
     void Render();
     int width, height;
     std::string title;
+    Renderer renderer;
+    Player player;
 };

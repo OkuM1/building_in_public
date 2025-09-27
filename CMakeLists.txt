@@ -3,7 +3,7 @@ project(MyGLFWApp)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(main src/main.cpp src/Engine.cpp)
+add_executable(main src/main.cpp src/Engine.cpp src/Renderer.cpp)
 
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
