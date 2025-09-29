@@ -1,0 +1,14 @@
+# Ignore build artifacts and OS files
+/build/
+*.o
+*.obj
+*.exe
+*.out
+*.log
+*.DS_Store
+*.swp
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+

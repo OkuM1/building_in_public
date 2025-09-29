@@ -1,33 +1,46 @@
-## Game Engine Project Structure
 
+## Features
+- Grid-based map rendering
+- Player entity with position and movement
+- Arrow key input for movement
+- Minimalist graphics (rectangles for map and player)
+
+## Getting Started
+
+### Prerequisites
+- C++ compiler (g++)
+- CMake
+- OpenGL development libraries
+- GLFW development libraries
+
+### Build Instructions
+1. Clone the repository
+2. Run the build script:
+	```bash
+	./build.sh
+	```
+3. Run the executable:
+	```bash
+	cd build
+	./main
+	```
+
+## Project Structure
 ```
-.
-├── CMakeLists.txt
-├── CMakePresets.json
-├── README.md
-├── src/
-│   └── main.cpp
-├── include/
-├── tests/
-└── build/
+include/      # Header files (Engine, Renderer, Player)
+src/          # Source files (Engine.cpp, Renderer.cpp, main.cpp)
+CMakeLists.txt
+build.sh      # Build script
+README.md     # This file
 ```
 
-### How to Build
+## How the Engine Works
+- The window displays a grid map.
+- The player is a green rectangle that moves with arrow keys.
+- Movement is clamped to the grid boundaries.
 
-```bash
-cmake --preset=default
-cmake --build --preset=default
-```
-
-### How to Run
-
-```bash
-cd build
-./main
-```
-
-### Where to Put Your Code
-- Place engine source files in `src/`
-- Place headers in `include/`
-- Place tests in `tests/`
-Building...
+## Learning Resources
+- [LearnOpenGL](https://learnopengl.com/)
+- [GLFW Documentation](https://www.glfw.org/docs/latest/)
+- [C++ Reference](https://en.cppreference.com/)
+- [Game Programming Patterns](https://gameprogrammingpatterns.com/)

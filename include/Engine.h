@@ -1,9 +1,11 @@
 #pragma once
 #include <GLFW/glfw3.h>
 #include <string>
+#include <vector>
 
 #include "Renderer.h"
-#include "Player.h"
+#include "Entity.h"
+#include "Entity.h"
 
 class Engine {
 public:
@@ -21,5 +23,7 @@ private:
     int width, height;
     std::string title;
     Renderer renderer;
-    Player player;
+    std::vector<Entity> entities;
+    // Key state tracking for discrete movement
+    bool lastUp, lastDown, lastLeft, lastRight;
 };
