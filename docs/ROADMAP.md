@@ -27,11 +27,11 @@
 ### Phase 1: Foundation Refactor (Week 1-2)
 **Goal:** Restructure codebase for professional standards and multiplayer readiness
 
-- [ ] Implement Entity-Component-System (ECS) architecture
-- [ ] Separate game logic from rendering
-- [ ] Add proper logging system
-- [ ] Set up unit testing with Google Test
-- [ ] Create CI/CD pipeline (GitHub Actions)
+- [x] Implement Entity-Component-System (ECS) architecture
+- [x] Separate game logic from rendering
+- [x] Add proper logging system
+- [x] Set up unit testing with doctest
+- [x] Create CI/CD pipeline (GitHub Actions)
 
 **Learning Resources:**
 - [Game Programming Patterns - Component](https://gameprogrammingpatterns.com/component.html)
@@ -44,11 +44,11 @@
 ### Phase 2: Deterministic Game Loop (Week 3-4)
 **Goal:** Create a fixed-timestep game loop that produces identical results given same inputs
 
-- [ ] Implement fixed timestep update loop
-- [ ] Separate update rate from render rate
-- [ ] Make all game logic deterministic (no random without seeds)
-- [ ] Create input recording/playback system
-- [ ] Add debug visualization tools
+- [x] Implement fixed timestep update loop
+- [x] Separate update rate from render rate
+- [x] Make all game logic deterministic (no random without seeds)
+- [x] Create input recording/playback system
+- [x] Add debug visualization tools (FPS Counter)
 
 **Learning Resources:**
 - [Fix Your Timestep! - Glenn Fiedler](https://gafferongames.com/post/fix_your_timestep/)

@@ -11,6 +11,11 @@ struct Transform {
     float rotation;      // Rotation in radians
 };
 
+struct PreviousTransform {
+    float x, y;          // Position at start of frame
+    float rotation;
+};
+
 struct Velocity {
     float vx, vy;        // Velocity per second
 };

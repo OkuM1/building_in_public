@@ -5,6 +5,25 @@
 namespace engine {
 
 void InputSystem::update(World& world, float dt) {
+    // Handle Recording Controls
+    if (glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS) {
+        if (recorder.GetState() == InputRecorder::State::IDLE) {
+            recorder.StartRecording();
+        }
+    }
+    if (glfwGetKey(window, GLFW_KEY_F6) == GLFW_PRESS) {
+        if (recorder.GetState() == InputRecorder::State::RECORDING) {
+            recorder.StopRecording("recording.bin");
+        } else if (recorder.GetState() == InputRecorder::State::PLAYBACK) {
+            recorder.StopPlayback();
+        }
+    }
+    if (glfwGetKey(window, GLFW_KEY_F7) == GLFW_PRESS) {
+        if (recorder.GetState() == InputRecorder::State::IDLE) {
+            recorder.StartPlayback("recording.bin");
+        }
+    }
+
     // Process input for all entities with PlayerInput component
     for (EntityId entity = 0; entity < MAX_ENTITIES; ++entity) {
         if (!world.hasComponent<game::PlayerInput>(entity)) {
@@ -13,17 +32,23 @@ void InputSystem::update(World& world, float dt) {
         
         auto& input = world.getComponent<game::PlayerInput>(entity);
         
-        // Read keyboard state
-        input.moveUp = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
-                       glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS;
-        input.moveDown = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
-                         glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS;
-        input.moveLeft = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
-                         glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS;
-        input.moveRight = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS ||
-                          glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS;
-        input.attack = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-        input.dodge = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+        // Only read keyboard if NOT playing back
+        if (recorder.GetState() != InputRecorder::State::PLAYBACK) {
+            // Read keyboard state
+            input.moveUp = glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+                        glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS;
+            input.moveDown = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+                            glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS;
+            input.moveLeft = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+                            glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS;
+            input.moveRight = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS ||
+                            glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS;
+            input.attack = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+            input.dodge = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+        }
+
+        // Process via recorder (saves if recording, overwrites if playing back)
+        recorder.ProcessInput(input);
         
         // Update velocity based on input (if entity has velocity)
         if (world.hasComponent<game::Velocity>(entity)) {

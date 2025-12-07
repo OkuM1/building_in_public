@@ -94,6 +94,19 @@ Fixed timestep for deterministic simulation:
 - `TICK_RATE`: 1/60 seconds (60 Hz simulation)
 - `NETWORK_RATE`: 1/20 seconds (20 Hz network updates)
 
+### Infrastructure
+
+#### Logging
+Thread-safe, color-coded logging system for debugging and server monitoring.
+- **Levels:** DEBUG, INFO, WARN, ERROR
+- **Output:** Console (stdout/stderr), extensible to file
+- **Format:** `[HH:MM:SS.ms] [LEVEL] Message`
+
+#### Testing
+Unit testing framework using **doctest**.
+- **Location:** `tests/`
+- **CI/CD:** GitHub Actions runs tests on every push
+
 ## Network Architecture
 
 ### Protocol Stack

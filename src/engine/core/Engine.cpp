@@ -2,14 +2,14 @@
 #include "engine/systems/RenderSystem.h"
 #include "engine/systems/InputSystem.h"
 #include "engine/systems/MovementSystem.h"
-#include <iostream>
+#include "engine/core/Logger.h"
 
 Engine::Engine(int width, int height, const std::string& title)
-    : window(nullptr), width(width), height(height), title(title), lastUp(false), lastDown(false), lastLeft(false), lastRight(false) {
+    : window(nullptr), width(width), height(height), title(title) {
     Init();
     window = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (!window) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
+        engine::Logger::Error("Failed to create GLFW window");
         glfwTerminate();
     } else {
         glfwMakeContextCurrent(window);
@@ -18,16 +18,12 @@ Engine::Engine(int width, int height, const std::string& title)
     // Initialize ECS
     InitECS();
     CreateTestEntities();
-    
-    // Add legacy entities (will be removed once fully migrated)
-    entities.push_back(Entity(0, 0, "A"));
-    entities.push_back(Entity(5, 5, "B"));
-    entities.push_back(Entity(10, 8, "C"));
 }
 
 void Engine::InitECS() {
     // Register all component types
     world.registerComponent<game::Transform>();
+    world.registerComponent<game::PreviousTransform>();
     world.registerComponent<game::Renderable>();
     world.registerComponent<game::Velocity>();
     world.registerComponent<game::PlayerInput>();
@@ -44,6 +40,7 @@ void Engine::CreateTestEntities() {
     // Create player entity (controllable)
     engine::EntityId player = world.createEntity();
     world.addComponent(player, game::Transform{0.0f, 0.0f, 0.0f});
+    world.addComponent(player, game::PreviousTransform{0.0f, 0.0f, 0.0f});
     world.addComponent(player, game::Velocity{0.0f, 0.0f});
     world.addComponent(player, game::PlayerInput{});
     world.addComponent(player, game::Renderable{
@@ -57,6 +54,7 @@ void Engine::CreateTestEntities() {
     // Create enemy entity (not controllable)
     engine::EntityId enemy = world.createEntity();
     world.addComponent(enemy, game::Transform{0.3f, 0.2f, 0.0f});
+    world.addComponent(enemy, game::PreviousTransform{0.3f, 0.2f, 0.0f});
     world.addComponent(enemy, game::Renderable{
         game::Renderable::Shape::Circle,
         0.8f, 0.2f, 0.2f,  // Red
@@ -65,8 +63,8 @@ void Engine::CreateTestEntities() {
     });
     world.addComponent(enemy, game::Enemy{});
     
-    std::cout << "Created player entity (ID: " << player << ") - Use WASD/Arrows to move!" << std::endl;
-    std::cout << "Created enemy entity (ID: " << enemy << ")" << std::endl;
+    engine::Logger::Info("Created player entity (ID: ", player, ") - Use WASD/Arrows to move!");
+    engine::Logger::Info("Created enemy entity (ID: ", enemy, ")");
 }
 
 Engine::~Engine() {
@@ -75,20 +73,47 @@ Engine::~Engine() {
 
 void Engine::Init() {
     if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
+        engine::Logger::Error("Failed to initialize GLFW");
     }
 }
 
 void Engine::MainLoop() {
+    lastFrameTime = glfwGetTime();
+
     while (window && !glfwWindowShouldClose(window)) {
-        Update();
-        Render();
+        float currentTime = glfwGetTime();
+        float frameTime = currentTime - lastFrameTime;
+        lastFrameTime = currentTime;
+
+        // Prevent spiral of death (cap frame time)
+        if (frameTime > 0.25f) frameTime = 0.25f;
+
+        accumulator += frameTime;
+
+        while (accumulator >= FIXED_TIMESTEP) {
+            Update(FIXED_TIMESTEP);
+            accumulator -= FIXED_TIMESTEP;
+        }
+
+        // Calculate alpha for interpolation
+        float alpha = accumulator / FIXED_TIMESTEP;
+        Render(alpha);
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // FPS Counter
+        frameCount++;
+        fpsTimer += frameTime;
+        if (fpsTimer >= 1.0f) {
+            std::string newTitle = title + " - " + std::to_string(frameCount) + " FPS";
+            glfwSetWindowTitle(window, newTitle.c_str());
+            frameCount = 0;
+            fpsTimer = 0.0f;
+        }
     }
 }
 
-void Engine::Update() {
+void Engine::Update(float dt) {
     if (window) {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, true);
@@ -96,70 +121,20 @@ void Engine::Update() {
     }
     
     // Run ECS systems (except render system)
-    // Fixed timestep of 1/60 for now (will improve later)
-    const float dt = 1.0f / 60.0f;
-    
     for (auto& system : systems) {
         // Skip render system here (it runs in Render())
         if (dynamic_cast<engine::RenderSystem*>(system.get()) == nullptr) {
             system->update(world, dt);
         }
     }
-    
-    // Legacy entity update (will be removed)
-    for (auto& entity : entities) {
-        if (entity.tag == "A") {
-            bool upPressed = glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS;
-            bool downPressed = glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS;
-            bool leftPressed = glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS;
-            bool rightPressed = glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS;
-
-            if (upPressed && !lastUp) {
-                entity.y = std::max(entity.y - 1, 0);
-            }
-            if (downPressed && !lastDown) {
-                entity.y = std::min(entity.y + 1, 9);
-            }
-            if (leftPressed && !lastLeft) {
-                entity.x = std::max(entity.x - 1, 0);
-            }
-            if (rightPressed && !lastRight) {
-                entity.x = std::min(entity.x + 1, 15);
-            }
-
-            lastUp = upPressed;
-            lastDown = downPressed;
-            lastLeft = leftPressed;
-            lastRight = rightPressed;
-        }
-    }
 }
 
-namespace {
-    constexpr int GRID_ROWS = 10;
-    constexpr int GRID_COLS = 16;
-    constexpr float CELL_SIZE = 0.1f;
-
-    void setEntityColor(const std::string& tag) {
-        if (tag == "A") glColor3f(0.2f, 0.8f, 0.2f); // Green
-        else if (tag == "B") glColor3f(0.2f, 0.2f, 0.8f); // Blue
-        else if (tag == "C") glColor3f(0.8f, 0.2f, 0.2f); // Red
-        else glColor3f(0.8f, 0.8f, 0.8f); // Default gray
-    }
-}
-
-void Engine::Render() {
+void Engine::Render(float alpha) {
     // Run only the render system
     for (auto& system : systems) {
         if (dynamic_cast<engine::RenderSystem*>(system.get()) != nullptr) {
-            system->update(world, 0.0f);
+            system->update(world, alpha);
         }
-    }
-    
-    // Legacy rendering (will be removed)
-    for (const auto& entity : entities) {
-        setEntityColor(entity.tag);
-        renderer.RenderEntity(entity, CELL_SIZE, GRID_COLS, GRID_ROWS);
     }
 }
 

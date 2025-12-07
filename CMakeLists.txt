@@ -41,6 +41,8 @@ find_package(glfw3 REQUIRED)
 add_library(engine_core STATIC
     # Engine Core
     src/engine/core/Engine.cpp
+    src/engine/core/Logger.cpp
+    src/engine/core/InputRecorder.cpp
     
     # Platform Layer
     src/engine/platform/Renderer.cpp
@@ -54,7 +56,6 @@ add_library(engine_core STATIC
     src/engine/systems/MovementSystem.cpp
     
     # Future:
-    # src/engine/core/Logger.cpp
     # src/game/systems/AISystem.cpp
     # src/game/systems/CombatSystem.cpp
 )
@@ -88,13 +89,31 @@ target_link_libraries(main PRIVATE engine_core)
 # target_compile_definitions(server PRIVATE HEADLESS_SERVER)
 
 # ============================================================================
-# Tests (to be implemented)
+# Tests
 # ============================================================================
 option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
-    # find_package(GTest REQUIRED)
-    # enable_testing()
-    # add_subdirectory(tests)
+    include(FetchContent)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.4.11
+    )
+    FetchContent_MakeAvailable(doctest)
+
+    enable_testing()
+    
+    add_executable(unit_tests
+        tests/main.cpp
+        tests/test_logger.cpp
+    )
+    
+    target_link_libraries(unit_tests PRIVATE engine_core doctest::doctest)
+    
+    # Ensure we can find doctest.h
+    target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR}/doctest)
+
+    add_test(NAME unit_tests COMMAND unit_tests)
 endif()
 
 # ============================================================================

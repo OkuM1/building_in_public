@@ -14,6 +14,14 @@ void MovementSystem::update(World& world, float dt) {
         auto& transform = world.getComponent<game::Transform>(entity);
         auto& velocity = world.getComponent<game::Velocity>(entity);
         
+        // Save previous position for interpolation
+        if (world.hasComponent<game::PreviousTransform>(entity)) {
+            auto& prev = world.getComponent<game::PreviousTransform>(entity);
+            prev.x = transform.x;
+            prev.y = transform.y;
+            prev.rotation = transform.rotation;
+        }
+
         // Update position
         transform.x += velocity.vx * dt;
         transform.y += velocity.vy * dt;

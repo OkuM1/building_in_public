@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/System.h"
 #include "game/components/GameComponents.h"
+#include "engine/core/InputRecorder.h"
 #include <GLFW/glfw3.h>
 
 namespace engine {
@@ -13,6 +14,7 @@ public:
 
 private:
     GLFWwindow* window;
+    InputRecorder recorder;
 };
 
 } // namespace engine
