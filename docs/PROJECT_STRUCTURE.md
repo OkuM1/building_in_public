@@ -1,5 +1,9 @@
 # Project Structure
 
+> See [DEVELOPMENT.md](DEVELOPMENT.md) for the authoritative current layout.
+> This file describes the **target** structure; items marked *(planned)* do not
+> yet exist on disk.
+
 ```
 Building_in_public/
 ├── .clang-format              # Code formatting rules
@@ -9,77 +13,50 @@ Building_in_public/
 ├── LICENSE                    # MIT License
 ├── README.md                  # Project overview
 ├── CONTRIBUTING.md            # Development guidelines
+├── build.sh  clean.sh         # Build / clean scripts (repo root)
 │
 ├── .github/
 │   └── workflows/
 │       └── build.yml          # CI/CD pipeline
 │
 ├── docs/                      # Documentation
-│   ├── ROADMAP.md            # Development roadmap
-│   ├── ARCHITECTURE.md       # System architecture
-│   ├── ENGINE_DESIGN.md      # ECS design document
-│   ├── GAME_DESIGN.md        # Game design document
-│   ├── DEVLOG.md             # Weekly development log
-│   └── NETWORKING.md         # [Future] Network protocol docs
+│   ├── DEVELOPMENT.md         # Living context doc (start here)
+│   ├── ROADMAP.md             # Development roadmap
+│   ├── ARCHITECTURE.md        # System architecture
+│   ├── ENGINE_DESIGN.md       # ECS design document
+│   ├── GAME_DESIGN.md         # Game design document
+│   ├── DEVLOG.md              # Weekly development log
+│   └── NETWORKING.md          # (planned) Network protocol docs
 │
 ├── include/                   # Header files
-│   ├── engine/               # Engine code
-│   │   ├── core/             # Core engine systems
-│   │   │   └── Engine.h      # Main engine class
-│   │   ├── ecs/              # Entity-Component-System
-│   │   │   ├── Entity.h      # Entity ID type
-│   │   │   ├── Component.h   # Component type system
-│   │   │   ├── World.h       # ECS world manager
-│   │   │   └── System.h      # System base class
-│   │   ├── platform/         # Platform abstraction
-│   │   │   └── Renderer.h    # OpenGL renderer
-│   │   └── systems/          # Engine systems
-│   │       └── RenderSystem.h
-│   │
-│   ├── game/                 # Game-specific code
-│   │   ├── components/       # Game components
-│   │   │   └── GameComponents.h  # Transform, Renderable, etc.
-│   │   └── systems/          # Game systems
-│   │       └── [Future] AISystem.h, CombatSystem.h
-│   │
-│   └── legacy/               # Old code (to be removed)
-│       ├── Entity.h          # Original entity struct
-│       └── Player.h          # Original player class
+│   ├── engine/                # Engine code
+│   │   ├── core/              # Engine, Logger, InputRecorder
+│   │   ├── ecs/               # Entity, Component, World, System
+│   │   ├── platform/          # Renderer (GLFW + OpenGL)
+│   │   └── systems/           # RenderSystem, InputSystem, MovementSystem
+│   └── game/                  # Game-specific code
+│       ├── components/        # GameComponents.h (Transform, Velocity, …)
+│       └── systems/           # (planned) AISystem.h, CombatSystem.h
 │
-├── src/                      # Source files (mirrors include/)
+├── src/                       # Source files (mirrors include/)
+│   ├── main.cpp               # Current entry point
 │   ├── engine/
-│   │   ├── core/
-│   │   │   └── Engine.cpp
-│   │   ├── ecs/
-│   │   │   └── World.cpp
-│   │   ├── platform/
-│   │   │   └── Renderer.cpp
-│   │   └── systems/
-│   │       └── RenderSystem.cpp
-│   │
-│   ├── game/
-│   │   └── systems/
-│   │       └── [Future] AISystem.cpp
-│   │
-│   ├── client/               # [Future] Client executable
-│   │   └── main_client.cpp
-│   │
-│   ├── server/               # [Future] Server executable
-│   │   └── main_server.cpp
-│   │
-│   └── main.cpp              # Current main (temporary)
+│   │   ├── core/              # Engine.cpp, Logger.cpp, InputRecorder.cpp
+│   │   ├── ecs/               # World.cpp
+│   │   ├── platform/          # Renderer.cpp
+│   │   └── systems/           # RenderSystem.cpp, InputSystem.cpp, MovementSystem.cpp
+│   └── game/
+│       └── systems/           # (empty — reserved)
+│   # Planned: src/client/main_client.cpp, src/server/main_server.cpp
 │
-├── tests/                    # Unit and integration tests
-│   └── [Future] test_ecs.cpp
+├── tests/                     # Unit and integration tests
+│   ├── main.cpp               # doctest runner
+│   └── test_logger.cpp
 │
-├── scripts/                  # Build and deployment scripts
-│   ├── build.sh             # Build script
-│   └── clean.sh             # Clean script
-│
-└── build/                    # Build output (gitignored)
-    ├── client               # Client executable
-    ├── main                 # Main executable
-    └── ...
+└── build/                     # Build output (gitignored)
+    ├── main                   # Game executable
+    ├── client                 # Alias target, identical to main for now
+    └── unit_tests             # Doctest runner
 ```
 
 ## Layer Architecture
@@ -147,14 +124,20 @@ Building_in_public/
 
 | Component | Status | Files |
 |-----------|--------|-------|
-| **ECS Core** | ✅ Done | Entity.h, Component.h, World.h/cpp, System.h |
-| **Render System** | ✅ Done | RenderSystem.h/cpp, Renderer.h/cpp |
-| **Game Components** | ✅ Basic | Transform, Renderable |
-| **Input System** | ⏳ Next | - |
-| **Physics/Movement** | ⏳ Planned | - |
-| **AI System** | ⏳ Planned | - |
-| **Combat System** | ⏳ Planned | - |
-| **Networking** | ⏳ Planned | - |
+| **ECS Core**        | ✅ Done  | Entity.h, Component.h, World.h/cpp, System.h |
+| **Logger**          | ✅ Done  | Logger.h/cpp |
+| **Renderer**        | ✅ Done  | Renderer.h/cpp |
+| **Render System**   | ✅ Done  | RenderSystem.h/cpp (with interpolation) |
+| **Input System**    | ✅ Done  | InputSystem.h/cpp |
+| **Movement System** | ✅ Done  | MovementSystem.h/cpp |
+| **Fixed Timestep Loop** | ✅ Done | Engine.cpp |
+| **Input Recorder**  | ✅ Done  | InputRecorder.h/cpp |
+| **Game Components** | ✅ Basic | Transform, PreviousTransform, Velocity, Renderable, PlayerInput, Player/Enemy tags |
+| **Collision System**| 🔜 Next  | — |
+| **AI System**       | ⏳ Planned | — |
+| **Combat System**   | ⏳ Planned | — |
+| **Serialization**   | ⏳ Planned | — |
+| **Networking**      | ⏳ Planned | — |
 
 ## Build Targets
 
@@ -174,8 +157,10 @@ ctest
 
 ## Next Steps
 
-1. Remove test ECS code from main.cpp
-2. Implement InputSystem for player movement
-3. Add Velocity component and MovementSystem
-4. Create proper client/main_client.cpp
-5. Start on game logic (dungeon, enemies)
+See [DEVELOPMENT.md → Next up](DEVELOPMENT.md#-next-up-ordered) for the current
+ordered task list. In summary:
+
+1. Add `CollisionSystem` (AABB) and a `Collider` component.
+2. Add `AISystem` (enemy pursues player).
+3. Add `Health` + `CombatSystem`.
+4. Then begin Phase 3: binary serialization for snapshots.

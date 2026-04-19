@@ -1,3 +1,218 @@
+# Engine-First Roadmap
+
+> A learning-focused roadmap for building a **highly performant, networked C++
+> game engine**. The engine is the product; games are testbeds that force us
+> to build it right.
+
+---
+
+## 🎯 Project goals
+
+1. **Learn** — deep understanding of engine architecture, networking, systems programming.
+2. **Build** — a functional multiplayer engine that can be deployed to the cloud.
+3. **Showcase** — a portfolio piece with *measured* performance numbers, not vibes.
+
+**Testbed game:** [Sumo Arena](SUMO_ARENA.md) — minimalist physics PvP chosen
+because it stresses every hard netcode problem (prediction, reconciliation,
+lag comp, interest management) with zero art budget. The [Dungeon Crawler](GAME_DESIGN.md)
+is parked as a later showcase on the same engine.
+
+---
+
+## 📏 Performance targets (how we know it's "done")
+
+Numbers are committed to `bench/results.md` and tracked over time.
+
+| Metric | Target |
+|---|---|
+| Server tick rate, sustained            | 60 Hz with 16 clients |
+| Simulated entities (server)            | 1k active, headroom for 10k |
+| Downstream bandwidth per client        | < 32 KB/s @ 20 Hz snapshots |
+| Upstream bandwidth per client          | < 4 KB/s @ 60 Hz inputs |
+| End-to-end input → render latency (LAN)| < 1 frame |
+| Playable over simulated RTT            | 150 ms |
+| Smooth over simulated packet loss      | 5 % (playable at 15 %) |
+| Full snapshot @ 1k entities            | < 4 KB |
+| Typical delta snapshot                 | < 200 B |
+| Concurrent players per $5/mo VPS       | ≥ 100 |
+
+---
+
+## 🗺️ Phases
+
+### Phase 1 — Foundation & ECS ✅ *done*
+- [x] ECS (entities, packed component arrays, world, system interface)
+- [x] Logger (thread-safe, color-coded)
+- [x] Unit tests (doctest) + CI (GitHub Actions)
+- [x] Modern CMake, clang-format, MIT license
+
+---
+
+### Phase 2 — Deterministic simulation ✅ *done*
+- [x] Fixed 60 Hz update loop (Glenn Fiedler's "Fix Your Timestep")
+- [x] Decoupled render rate with interpolation via `PreviousTransform`
+- [x] Input recording & playback (`F5` / `F6` / `F7`) — determinism proven
+- [x] FPS counter
+
+---
+
+### Phase 2.5 — Engine/Client split (prep for headless server)
+**Why now:** `Engine` currently owns the GLFW window *and* the world. A
+headless server needs `Simulation` with zero GLFW dependency. Do this before
+Phase 3 or we pay for it twice.
+
+- [ ] Extract `engine::Simulation` — owns `World`, systems, fixed-tick loop, `tick` counter (no GLFW).
+- [ ] Extract `client::ClientApp` — owns window, renderer, input polling, calls into `Simulation`.
+- [ ] New CMake targets: `simulation` (static lib, headless-safe), `client` (links `simulation` + renderer), `server` (links `simulation` only, gated by `-DENGINE_HEADLESS`).
+- [ ] Drop the duplicate `main` target in favour of `client`.
+- [ ] Sim time uses `uint32_t tick`, not `float dt` — tick is the authoritative clock for networking.
+
+**Milestone:** `./build/server` builds and runs a headless simulation on a machine without OpenGL.
+
+---
+
+### Phase 3 — Serialization & snapshots
+**Why:** everything after this depends on compact, fast snapshot encoding.
+
+- [ ] `engine::net::BitStream` — bit-level read/write, variable-length ints.
+- [ ] Quantised types: position (16-bit fixed point), angle (8-bit), bool packing.
+- [ ] Per-component `serialize(BitStream&)` (traits template; no RTTI).
+- [ ] Full world snapshot encode/decode.
+- [ ] **Delta encoding:** per-component dirty flags, baseline-ack + delta snapshots.
+- [ ] `bench/` scaffold (google-benchmark wired into CMake); track encode/decode throughput and snapshot size.
+
+**Milestone:** 1k-entity full snapshot < 4 KB; typical delta < 200 B; committed benchmarks.
+
+---
+
+### Phase 4 — Reliable UDP layer (split; this is the hardest phase)
+
+#### 4a. Sockets
+- [ ] Cross-platform non-blocking UDP socket wrapper (`engine::net::Socket`) for Linux + Windows.
+- [ ] Linux: use `recvmmsg` / `sendmmsg` for batched syscalls.
+
+#### 4b. Packet header + ack system
+- [ ] 16-byte header: sequence, ack, ack bitfield (32 previous packets), channel id.
+- [ ] Round-trip time estimation (smoothed RTT).
+
+#### 4c. Channels
+- [ ] Unreliable (snapshots).
+- [ ] Reliable-unordered (events like eliminations).
+- [ ] Reliable-ordered (lobby state, round start/end).
+
+#### 4d. Fragmentation
+- [ ] Fragment messages > MTU; reassemble on receive; drop on missing fragments after timeout.
+
+#### 4e. Congestion control
+- [ ] RTT-based send-rate scaling (good / bad network modes, per Gaffer).
+
+#### 4f. Network simulator
+- [ ] In-process `SimulatedLink` injecting latency / jitter / loss / reordering so the whole stack is testable without a second machine.
+
+**Benchmarks:** throughput, loss behaviour, jitter buffer effectiveness.
+
+**Milestone:** two processes exchange reliable + unreliable messages over loopback with injected 150 ms / 5 % loss and remain stable.
+
+---
+
+### Phase 5 — Replication model
+- [ ] Server-authoritative simulation — clients send inputs, never game state.
+- [ ] Snapshot interpolation for remote entities (~100 ms render delay).
+- [ ] Client-side prediction for the local player.
+- [ ] Server reconciliation: on snapshot ACK, snap to authoritative state and replay pending inputs.
+- [ ] Lag compensation for contact hits (rewind server state to attacker's view-time).
+- [ ] **Area of Interest / relevance filtering** — per-client entity subset. Critical for scaling.
+
+**Milestone:** [Sumo Arena](SUMO_ARENA.md) MVP is playable and feels good at 0 / 50 / 100 / 150 ms RTT and 0 / 5 % loss.
+
+---
+
+### Phase 5.5 — Rollback netcode *(optional but high-signal)*
+- [ ] Ring buffer of `N` recent sim snapshots.
+- [ ] On misprediction / late remote input: restore snapshot, resimulate forward.
+- [ ] Compare against snapshot-interpolation path under a flag; document trade-offs.
+
+**Why:** determinism work from Phase 2 makes this tractable. Rollback netcode is a genuinely hireable niche.
+
+---
+
+### Phase 6 — Deployment & ops
+- [ ] Static-linked Linux server binary.
+- [ ] Distroless Docker image.
+- [ ] Prometheus metrics endpoint on the server: tick time, snapshot size p50/p95/p99, clients connected, packet loss, CPU.
+- [ ] Structured JSON logging in server mode.
+- [ ] Soak test: 100 simulated clients against a server on a $5/mo VPS-class instance.
+- [ ] One-command deploy script.
+
+**Milestone:** friends can connect from different locations and play; server metrics are observable from a browser.
+
+---
+
+### Phase 7 — Benchmarks, docs, demo
+- [ ] Formal performance report with flame graphs and bandwidth histograms in `docs/`.
+- [ ] Final architecture diagrams (reality, not aspiration).
+- [ ] Short demo video (30–60 s).
+- [ ] Technical write-ups, at least two of:
+  - "A 4 KB world snapshot: bit-packing an ECS."
+  - "Reliable UDP from scratch in C++."
+  - "Rollback netcode for non-fighters."
+  - "Client-side prediction when your state is an ECS."
+- [ ] README leads with the numbers, not the plan.
+
+**Milestone:** anyone looking at the repo in 60 seconds understands what it does and how fast it is.
+
+---
+
+## 🧭 Technology choices
+
+| Component | Choice | Rationale |
+|---|---|---|
+| Language          | C++17                    | Modern enough, industry standard |
+| Build             | CMake + presets          | Cross-platform, standard |
+| Graphics (client) | OpenGL + GLFW            | Already in; client-only after Phase 2.5 |
+| Networking        | Custom UDP               | This *is* the learning project |
+| Serialization     | Custom bit-level         | Required for < 4 KB snapshots |
+| Tests             | doctest                  | Already integrated, low ceremony |
+| Benchmarks        | google-benchmark         | Industry standard microbench tool |
+| CI                | GitHub Actions           | Free, integrated |
+| Containers        | Docker (distroless)      | Small, standard |
+| Cloud             | Small VPS (DO / Hetzner) | Cheap, real-world constraints |
+| Metrics           | Prometheus text format   | Scrapable, human-readable |
+
+---
+
+## 📅 Log template
+
+Entries live in [DEVLOG.md](DEVLOG.md).
+
+```markdown
+## Week N — [Title]
+
+**Commit:** `<sha>`
+
+### Goals
+- [ ] ...
+
+### Completed
+- ...
+
+### Challenges / learnings
+- ...
+
+### Numbers
+- <new benchmark data if any>
+
+### Next
+- ...
+```
+
+---
+
+## 🚀 Immediate next move
+
+Phase 2.5 — the `Engine` → `Simulation` + `ClientApp` split. Small, focused,
+unblocks every subsequent phase. See [DEVELOPMENT.md](DEVELOPMENT.md) for
+the current ordered task list.
 # Multiplayer Game Engine Roadmap
 
 > A learning-focused roadmap for building a production-quality multiplayer game engine in C++

@@ -36,57 +36,77 @@ find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # ============================================================================
-# Core Library (shared between client and server)
+# simulation: platform-free static library (no GLFW / no OpenGL).
+# Links against this from the server executable to prove the headless
+# dependency graph works.
 # ============================================================================
-add_library(engine_core STATIC
-    # Engine Core
-    src/engine/core/Engine.cpp
+add_library(simulation STATIC
+    src/engine/core/Simulation.cpp
     src/engine/core/Logger.cpp
     src/engine/core/InputRecorder.cpp
-    
-    # Platform Layer
-    src/engine/platform/Renderer.cpp
-    
-    # ECS
+
     src/engine/ecs/World.cpp
-    
-    # Systems
-    src/engine/systems/RenderSystem.cpp
+
+    src/engine/net/BitStream.cpp
+    src/engine/net/Quantize.cpp
+    src/engine/net/Socket.cpp
+    src/engine/net/PacketHeader.cpp
+    src/engine/net/ReliableEndpoint.cpp
+    src/engine/net/Channel.cpp
+    src/engine/net/Fragmentation.cpp
+    src/engine/net/CongestionController.cpp
+    src/engine/net/SimulatedLink.cpp
+
     src/engine/systems/InputSystem.cpp
     src/engine/systems/MovementSystem.cpp
-    
-    # Future:
-    # src/game/systems/AISystem.cpp
-    # src/game/systems/CombatSystem.cpp
 )
 
-target_include_directories(engine_core 
-    PUBLIC 
+target_include_directories(simulation
+    PUBLIC
         ${CMAKE_SOURCE_DIR}/include
 )
 
-target_link_libraries(engine_core 
+# Enforce the headless invariant: the simulation library must not link
+# any windowing/GL library. See docs/design/0006-cmake-split.md.
+get_target_property(_sim_link_libs simulation LINK_LIBRARIES)
+if(_sim_link_libs MATCHES "glfw|OpenGL")
+    message(FATAL_ERROR
+        "simulation target must not link glfw/OpenGL (got: ${_sim_link_libs})")
+endif()
+
+# ============================================================================
+# client_lib: all the windowed/GL pieces that sit on top of `simulation`.
+# ============================================================================
+add_library(client_lib STATIC
+    src/client/ClientApp.cpp
+    src/client/input/KeyboardPoller.cpp
+    src/client/platform/Renderer.cpp
+    src/client/render/Rendering.cpp
+)
+
+target_include_directories(client_lib
     PUBLIC
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(client_lib
+    PUBLIC
+        simulation
         glfw
         OpenGL::GL
 )
 
 # ============================================================================
-# Client Executable
+# Client executable (windowed game)
 # ============================================================================
 add_executable(client src/main.cpp)
-target_link_libraries(client PRIVATE engine_core)
-
-# Alias for backward compatibility
-add_executable(main src/main.cpp)
-target_link_libraries(main PRIVATE engine_core)
+target_link_libraries(client PRIVATE client_lib)
 
 # ============================================================================
-# Server Executable (headless - to be implemented)
+# Server executable (headless - links `simulation` only)
 # ============================================================================
-# add_executable(server src/server/main_server.cpp)
-# target_link_libraries(server PRIVATE engine_core)
-# target_compile_definitions(server PRIVATE HEADLESS_SERVER)
+add_executable(server src/server/main_server.cpp)
+target_link_libraries(server PRIVATE simulation)
 
 # ============================================================================
 # Tests
@@ -106,9 +126,20 @@ if(BUILD_TESTS)
     add_executable(unit_tests
         tests/main.cpp
         tests/test_logger.cpp
+        tests/test_simulation_determinism.cpp
+        tests/test_bitstream.cpp
+        tests/test_quantize.cpp
+        tests/test_snapshot.cpp
+        tests/test_delta.cpp
+        tests/test_socket.cpp
+        tests/test_reliable_endpoint.cpp
+        tests/test_channel.cpp
+        tests/test_fragmentation.cpp
+        tests/test_congestion.cpp
+        tests/test_simulated_link.cpp
     )
     
-    target_link_libraries(unit_tests PRIVATE engine_core doctest::doctest)
+    target_link_libraries(unit_tests PRIVATE simulation doctest::doctest)
     
     # Ensure we can find doctest.h
     target_include_directories(unit_tests PRIVATE ${doctest_SOURCE_DIR}/doctest)
@@ -117,9 +148,36 @@ if(BUILD_TESTS)
 endif()
 
 # ============================================================================
+# Benchmarks (google-benchmark, opt-in).
+#
+# Built Release-only by default to keep numbers meaningful. Use
+#
+#     cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DBUILD_BENCH=ON
+#     cmake --build build-bench --target bench_snapshot
+#     ./build-bench/bench_snapshot
+#
+# Results are committed to `bench/results.md` per roadmap convention.
+# ============================================================================
+option(BUILD_BENCH "Build benchmarks (google-benchmark)" OFF)
+if(BUILD_BENCH)
+    include(FetchContent)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        googlebenchmark
+        GIT_REPOSITORY https://github.com/google/benchmark.git
+        GIT_TAG v1.8.3
+    )
+    FetchContent_MakeAvailable(googlebenchmark)
+
+    add_executable(bench_snapshot bench/bench_snapshot.cpp)
+    target_link_libraries(bench_snapshot PRIVATE simulation benchmark::benchmark)
+endif()
+
+# ============================================================================
 # Installation
 # ============================================================================
-install(TARGETS client main
+install(TARGETS client server
     RUNTIME DESTINATION bin
 )
 

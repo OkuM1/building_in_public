@@ -1,0 +1,52 @@
+# Minimal Doxyfile for the networked engine project.
+# Generate locally with:  doxygen Doxyfile
+# Output:                  build/docs/html/index.html
+#
+# See docs/CODE_DOCS.md for conventions.
+
+PROJECT_NAME           = "Networked C++ Game Engine"
+PROJECT_BRIEF          = "ECS + deterministic simulation + custom UDP networking"
+PROJECT_NUMBER         = 0.2
+
+# --- Inputs ---
+INPUT                  = include src docs
+FILE_PATTERNS          = *.h *.hpp *.cpp *.md
+RECURSIVE              = YES
+EXCLUDE                = build _deps
+USE_MDFILE_AS_MAINPAGE = README.md
+
+# --- Output ---
+OUTPUT_DIRECTORY       = build/docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+
+# --- What to document ---
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# --- Source browser so @see links reach actual code ---
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# --- Diagrams (graphviz optional; harmless if missing) ---
+HAVE_DOT               = NO
+CLASS_DIAGRAMS         = YES
+COLLABORATION_GRAPH    = NO
+
+# --- Warnings help keep comments honest ---
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+
+# --- C++17 goodies ---
+BUILTIN_STL_SUPPORT    = YES
+STRIP_CODE_COMMENTS    = NO

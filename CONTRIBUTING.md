@@ -177,10 +177,28 @@ TEST(GameStateTest, SerializationRoundTrip) {
 
 ## Documentation
 
-- Document all public APIs with comments
-- Update `docs/` for architectural changes
-- Include examples for complex features
-- Keep README.md up to date
+We run a three-layer documentation system. See [docs/CODE_DOCS.md](docs/CODE_DOCS.md)
+for the full spec — in short:
+
+1. **Doxygen-style header comments** on every public symbol (the *what*).
+   See the examples in `include/engine/ecs/Entity.h` and
+   `include/engine/ecs/System.h`. Generate HTML locally with `doxygen Doxyfile`.
+2. **Design notes** (ADR-style) under [docs/design/](docs/design/) for every
+   non-trivial decision (the *why*). Copy `TEMPLATE.md`, append to the index.
+3. **Learning notes** under [docs/learning/](docs/learning/) — one per
+   meaningful commit, reflecting on principles applied (the *what I learned*).
+
+For every non-trivial change:
+
+1. Write / update the **design note** before coding.
+2. Add Doxygen comments to new or changed public symbols; top of each
+   governed file carries `@see docs/design/NNNN-*.md`.
+3. Write the **learning note** while the decisions are still warm.
+4. Commit; reference the design note number in the commit body.
+
+- Update `docs/` for architectural changes.
+- Keep `docs/DEVELOPMENT.md` current — it is the ground truth for repo state.
+- Keep `README.md` current.
 
 ## Questions?
 

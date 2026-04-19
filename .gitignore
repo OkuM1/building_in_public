@@ -1,5 +1,6 @@
 # Ignore build artifacts and OS files
 /build/
+/build-bench/
 *.o
 *.obj
 *.exe
