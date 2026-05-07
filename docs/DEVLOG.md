@@ -5,7 +5,82 @@
 
 ---
 
-## Week 6: Phase 4 closeout — Connection glue + stability milestone
+## Week 7: Phase 5a — replication model primitives
+
+**Phase 5a shipped.** Server-authoritative loop, snapshot interpolation, and
+client-side prediction + reconciliation all implemented and tested.
+
+### Completed
+
+- **`engine::replication::InputMessage`.** Wire format for client→server
+  player inputs. `varint(tick)` + 6 packed bools. `serializeInput` /
+  `deserializeInput` round-trip cleanly. Every input carries the client's
+  simulation tick so the server can schedule it on its own timeline and echo
+  back a confirmed-up-to tick for reconciliation.
+
+- **`engine::replication::SnapshotBuffer`.** Client-side ring buffer of decoded
+  server snapshots. Stores `(EntityId, Transform)` per entity per tick (not raw
+  bytes). `interpolate(entityId, renderTick)` linearly blends between the two
+  bracketing snapshots, returning `std::nullopt` when the entity is absent in
+  either. Buffer capacity: 16 snapshots ≈ 0.8 s of 20-Hz history. Out-of-order
+  arrivals are silently discarded.
+
+- **`engine::replication::PredictionBuffer`.** Client-side ring buffer of
+  `(tick, PlayerInput, predictedTransform)`. `ackUpTo(T)` discards confirmed
+  entries. `getPending(T)` returns all unconfirmed entries after T for replay.
+  Capacity: 128 ticks ≈ 2.1 s at 60 Hz — enough headroom for any realistic RTT.
+
+- **End-to-end integration test.** Server runs `Simulation` + `InputSystem` +
+  `MovementSystem`. Client sends `moveRight = true` for 180 ticks via
+  `Connection::ReliableUnordered`. Server applies each input, steps the sim,
+  broadcasts unreliable snapshots. Client receives, decodes into
+  `SnapshotBuffer`, and interpolates. All assertions green:
+  - Server entity x > 0 after 180 ticks (movement applied).
+  - SnapshotBuffer populated; `canInterpolate` true at midpoint.
+  - Interpolated x > 0 (entity moved right on the server's canonical sim).
+  - PredictionBuffer capped at 128; `ackUpTo` + `getPending` return correct counts.
+
+- **Reconciliation unit test.** 60 ticks of `moveRight=true` prediction at
+  tick 30 receives a server snapshot with x = 0 (blocked). `ackUpTo(30)` +
+  `getPending(30)` + replay produces the correct corrected state (29 ×
+  kDxPerTick from x = 0 — not 60 × kDxPerTick as the client predicted).
+
+### Numbers
+| Entity | Result |
+|---|---|
+| InputMessage size (tick < 128, 0 buttons) | 2 bytes |
+| InputMessage size (tick < 128, all buttons) | 2 bytes |
+| SnapshotBuffer memory (16 slots × 16 entities × 16 B) | 4 KB |
+| PredictionBuffer memory (128 entries × ~32 B) | ~4 KB |
+
+### Tests
+110 test cases / 1864 assertions all green. New: 18 `test_replication.cpp`
+cases covering all three primitives plus the reconciliation flow and the full
+integration loop.
+
+### Docs
+- Design: [0020 replication model](design/0020-replication-model.md).
+- Learning: [0020](learning/0020-prediction-and-trust.md) — Prediction and
+  Trust: Why the Client Never Believes Itself.
+
+### Learnings
+- Prediction is trivial to implement; **reconciliation** is where the
+  interesting engineering lives. The buffer primitives make it mechanical.
+- Storing *decoded* state (not raw bytes) in the snapshot buffer trades
+  4 KB of extra memory for zero-cost interpolation queries — the right
+  trade for a rendering hot path.
+- The render delay insight: you don't interpolate forward to "now". You
+  interpolate backward to "a moment you have two data points for". This is
+  the entire reason snapshot buffering works.
+
+### Next
+- Phase 5b: `ReplicationServer` + `ReplicationClient` manager classes that
+  compose these three primitives into a full per-session state machine.
+  Then: Area of Interest filtering, lag compensation.
+
+---
+
+
 
 **Phase 4 closed.**
 

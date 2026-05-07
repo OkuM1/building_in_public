@@ -58,6 +58,10 @@ add_library(simulation STATIC
     src/engine/net/SimulatedLink.cpp
     src/engine/net/Connection.cpp
 
+    src/engine/replication/InputMessage.cpp
+    src/engine/replication/SnapshotBuffer.cpp
+    src/engine/replication/PredictionBuffer.cpp
+
     src/engine/systems/InputSystem.cpp
     src/engine/systems/MovementSystem.cpp
 )
@@ -139,6 +143,7 @@ if(BUILD_TESTS)
         tests/test_congestion.cpp
         tests/test_simulated_link.cpp
         tests/test_connection.cpp
+        tests/test_replication.cpp
     )
     
     target_link_libraries(unit_tests PRIVATE simulation doctest::doctest)
