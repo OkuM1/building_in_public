@@ -56,6 +56,7 @@ add_library(simulation STATIC
     src/engine/net/Fragmentation.cpp
     src/engine/net/CongestionController.cpp
     src/engine/net/SimulatedLink.cpp
+    src/engine/net/Connection.cpp
 
     src/engine/systems/InputSystem.cpp
     src/engine/systems/MovementSystem.cpp
@@ -137,6 +138,7 @@ if(BUILD_TESTS)
         tests/test_fragmentation.cpp
         tests/test_congestion.cpp
         tests/test_simulated_link.cpp
+        tests/test_connection.cpp
     )
     
     target_link_libraries(unit_tests PRIVATE simulation doctest::doctest)

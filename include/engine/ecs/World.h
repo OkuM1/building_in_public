@@ -1,6 +1,7 @@
 #pragma once
 #include "Entity.h"
 #include "Component.h"
+#include <array>
 #include <vector>
 #include <queue>
 #include <bitset>

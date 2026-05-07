@@ -67,6 +67,20 @@ public:
     bool processInboundHeader(const PacketHeader& h,
                               std::vector<std::uint16_t>& newlyAcked);
 
+    // Extended overload that also outputs loss declarations.
+    //
+    // After resolving acks, any of OUR sent sequences that are more
+    // than 32 positions behind the peer's current ack (`h.ack`) and
+    // still un-acked in the sent buffer are outside the peer's ack
+    // window forever — they will never be acked. Those sequences are
+    // appended to `newlyLost` and removed from the sent buffer.
+    //
+    // Connection uses this to call ReliableChannel::onPacketLost so
+    // the reliable channel schedules retransmission.
+    bool processInboundHeader(const PacketHeader& h,
+                              std::vector<std::uint16_t>& newlyAcked,
+                              std::vector<std::uint16_t>& newlyLost);
+
     // --- queries --------------------------------------------------
 
     // Smoothed round-trip time in milliseconds. Zero until the first

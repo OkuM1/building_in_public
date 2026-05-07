@@ -120,4 +120,33 @@ std::uint32_t ReliableEndpoint::computeOutboundAckBits() const {
     return bits;
 }
 
+bool ReliableEndpoint::processInboundHeader(const PacketHeader& h,
+                                            std::vector<std::uint16_t>& newlyAcked,
+                                            std::vector<std::uint16_t>& newlyLost) {
+    newlyLost.clear();
+    if (!processInboundHeader(h, newlyAcked)) return false;
+
+    // Sequences that are more than 32 positions behind the peer's
+    // current ack of our sends (h.ack) are outside the 32-bit ack
+    // window permanently. Any such sequence still present in sent_
+    // as un-acked will never be acked — declare it lost and remove
+    // it so future scans don't re-fire for the same sequence.
+    //
+    // We scan kScanDepth slots beyond the ack window. This bounds
+    // the per-call work while covering any practical RTT×rate combo:
+    //   64 slots @ 30 Hz = 2.1 s — comfortably more than the worst
+    //   case RTT+retransmit cycle.
+    static constexpr int kScanDepth = 64;
+    for (int offset = 33; offset < 33 + kScanDepth; ++offset) {
+        const auto seq = static_cast<std::uint16_t>(
+            h.ack - static_cast<std::uint16_t>(offset));
+        SentRecord* r = sent_.find(seq);
+        if (r && !r->acked) {
+            newlyLost.push_back(seq);
+            sent_.remove(seq);
+        }
+    }
+    return true;
+}
+
 }  // namespace engine::net

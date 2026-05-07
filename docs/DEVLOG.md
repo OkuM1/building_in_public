@@ -5,6 +5,63 @@
 
 ---
 
+## Week 6: Phase 4 closeout — Connection glue + stability milestone
+
+**Phase 4 closed.**
+
+### Completed
+- **Loss detection in `ReliableEndpoint`.** Added a two-vector overload of
+  `processInboundHeader` that, after resolving acks, scans 64 slots beyond
+  the 32-slot ack window and declares any un-acked sent sequences as lost.
+  The original single-vector overload is unchanged; all existing tests pass
+  without modification.
+- **`engine::net::Connection` (per-peer facade).** Wires together
+  `ReliableEndpoint`, `UnreliableChannel`, `ReliableChannel` (×2), and
+  `CongestionController`. Wire format: `[12-byte header] [ch0] [ch1] [ch2]`,
+  each channel section self-framing with a varint message count.
+  `buildPacket` always produces a valid packet (acks flow even with no
+  payload). `shouldSendNow` gates sends via the congestion controller.
+- **Phase 4 stability milestone ✅.** Two `Connection` objects over two
+  `SimulatedLink`s at 75 ms one-way / 5 % loss (= 150 ms RTT / 5 % loss)
+  deliver all 100 reliable-unordered events from A to B, maintain a
+  measured RTT estimate of ~150 ms, and remain stable for 12 simulated
+  seconds plus a 3-second drain.
+- **Pre-existing build fix.** Added missing `#include <array>` to
+  `include/engine/ecs/World.h` (masked by stdlib transitives in CI; exposed
+  on GCC 13 in the sandbox).
+
+### Numbers
+| Target | Result | Status |
+|---|---|---|
+| 150 ms RTT / 5 % loss stable | 100/100 events delivered | ✅ |
+| RTT estimate in range | ~150 ms (within 50–500 ms check) | ✅ |
+
+### Tests
+92 cases / 1783 assertions all green. New: 9 `test_connection.cpp` cases
+(unit tests + milestone test).
+
+### Docs
+- Design: [0019 connection glue](design/0019-connection-glue.md).
+- Learning: [0019](learning/0019-the-glue-is-not-the-boring-part.md) —
+  why the glue is not the boring part.
+
+### Learnings
+- A method that nobody calls (`onPacketLost`) is a promise deferred. It
+  works only when the surrounding machinery exists to invoke it. The glue
+  commit closes promises left open by sub-commits.
+- Loss detection needs no timers if you already have the peer's ack
+  horizon and your own sent buffer. The information was always there.
+- Integration tests rarely fail when units are solid. The milestone test
+  passed on the first run.
+
+### Next
+- Phase 5: replication model. Server-authoritative simulation, clients
+  send inputs only. Snapshot interpolation, client-side prediction, server
+  reconciliation, lag compensation. `Connection` is the send/receive
+  surface; Phase 5 sits entirely above it.
+
+---
+
 ## Week 5: Phase 3 — serialization & snapshots complete
 
 **All 5 commits shipped. Phase 3 closed.**

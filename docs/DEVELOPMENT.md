@@ -27,12 +27,12 @@ problems to show up.
 
 - **Branch:** `master` (clean, tracking `origin/master`)
 - **Latest commit:** `321d0a0` — *feat: complete phase 2 — fixed timestep, interpolation, and input recording*
-- **Active phase:** Phase 3 ✅ → **Phase 4 in progress** — reliable UDP, split into 6 sub-commits. **4a–4f ✅** (sockets, header+ack+RTT, channels, fragmentation, congestion control, net-sim). Next: **Phase 4 closeout** — glue all pieces into a per-peer facade and run the 150 ms / 5 % stability milestone.
+- **Active phase:** **Phase 4 ✅ complete** — all 6 sub-commits plus glue. Phase 4 stability milestone passed (150 ms / 5 % loss, 100/100 reliable events delivered). **Phase 5 is next** — replication model.
 - **Testbed:** [Sumo Arena](SUMO_ARENA.md) (design locked; no implementation yet)
 - **Runnable:**
   - `./build.sh && ./build/client` — windowed client, WASD/arrows + F5/F6/F7 record/stop/playback
   - `./build/server` — headless sim loop at 60 Hz, logs tick counter every second
-  - `cd build && ctest --output-on-failure` — doctest, includes determinism proof
+  - `cd build && ctest --output-on-failure` — 92 cases / 1783 assertions, all green
 
 ### Phase status
 
@@ -42,7 +42,7 @@ problems to show up.
 | 2. Deterministic simulation     | ✅ Done    | Fixed 60 Hz, interpolation, F5/F6/F7 input record/playback |
 | 2.5. Engine / Client split      | ✅ Done    | `simulation` (no GL) / `client_lib` / `server` targets; determinism test green |
 | 3. Serialization & snapshots    | ✅ Done    | `BitStream`, quantiser, trait-based snapshot encoder, delta encoder, benchmarks. Delta target ✅, full-snapshot target ❌ (parked). |
-| 4. Reliable UDP layer           | ⏳ In progress | **4a–4f ✅** (sockets, header+ack+RTT, channels, fragmentation, congestion, net-sim). Remaining: glue commit + 150 ms / 5 % stability run. |
+| 4. Reliable UDP layer           | ✅ Done    | 4a–4f + glue. `Connection` facade: ack/RTT, 3 channels, congestion. Milestone: 150 ms / 5 % loss ✅. |
 | 5. Replication model            | ⏳ Planned | Server auth, prediction, reconciliation, lag comp, AoI |
 | 5.5. Rollback netcode *(opt.)*  | ⏳ Stretch | Ring-buffer resim on misprediction |
 | 6. Deployment & ops             | ⏳ Planned | Docker, Prometheus, VPS soak test |
@@ -181,73 +181,53 @@ root if your editor/clangd needs it there.
 
 ## 🎯 Next up (ordered)
 
-### Phase 2.5 — Engine / Client split (this week)
+### Phase 5 — Replication model
 
-**Commit 1 ✅ — Decouple `InputSystem` from GLFW.** Done.
-See [design/0002](design/0002-decouple-inputsystem.md) and
-[learning/0002](learning/0002-data-as-a-seam.md). `client::KeyboardPoller`
-now produces `PlayerInput`; `InputSystem` reads the component. Build + tests
-green.
+Phase 4 closed with a working `Connection` facade. Phase 5 sits entirely
+above it — it never touches sockets, headers, or sequence numbers.
 
-**Commit 2 ✅ — Extract `engine::Simulation`.** Done. See
-[design/0003](design/0003-extract-simulation.md) and
-[learning/0003](learning/0003-headless-first.md). `Simulation` owns world,
-sim systems, accumulator, tick counter. `Engine` delegates. `Simulation.cpp`
-translation unit pulls in zero GLFW/GL headers (verified with `g++ -H`).
+**High-level plan (matches ROADMAP):**
 
-**Commit 3 ✅ — Rendering as a free function.** Done. See
-[design/0004](design/0004-render-as-free-function.md) and
-[learning/0004](learning/0004-polymorphism-for-sameness.md). Deleted
-`RenderSystem`; replaced with `engine::renderWorld(World&, Renderer&, float)`.
-`Engine` no longer owns a `unique_ptr<RenderSystem>`. `System` now
-unambiguously means “sim system”.
+1. **Server-authoritative loop.** Clients send `PlayerInput` packets via
+   `ChannelId::ReliableUnordered`; server owns the canonical simulation.
+   Per-tick loop: drain inbound → apply inputs → advance sim → broadcast
+   snapshot delta via `ChannelId::Unreliable`.
 
-**Next, Commit 4 — Introduce `client::ClientApp`:** move window ownership,
-`KeyboardPoller`, `InputRecorder`, and the render call out of `Engine` into
-a new `client::ClientApp`. `Engine` either retires or shrinks to a thin
-alias.
+2. **Snapshot interpolation.** Remote entities render at ~2-frame delay
+   using two buffered snapshots. `lerp(prevSnapshot, currSnapshot, alpha)`.
 
-1. **Introduce `engine::Simulation`** in `include/engine/core/Simulation.h`
-   + `src/engine/core/Simulation.cpp`:
-   - Owns the `World`, the list of systems, the accumulator, and a new
-     `uint32_t tick` counter.
-   - Exposes `step(fixedDt)` (runs exactly one tick) and `advance(realDt)`
-     (runs the accumulator loop). **No GLFW, no OpenGL includes.**
-2. **Introduce `client::ClientApp`** (or similar) that owns the window,
-   renderer, input polling, and calls `Simulation::advance`.
-3. **Shrink `Engine`**: move the windowing + render parts into `ClientApp`
-   and retire `Engine` (or keep it as a thin alias during transition).
-4. **CMake refactor:**
-   - `simulation` target — static lib, only engine sources with no GLFW.
-   - `client` target — depends on `simulation` + renderer + GLFW.
-   - Commented-out `server` target becomes real, gated by `-DENGINE_HEADLESS`,
-     linking only `simulation`.
-   - Drop the duplicate `main` target in favour of `client`.
-5. **Tick as clock**: replace internal `float dt` accounting with `uint32_t tick`
-   + `constexpr float FIXED_DT`. Systems still receive `dt` where convenient.
-6. **Tests:** a `Simulation` stepped N times with recorded inputs produces
-   identical transforms (determinism test).
+3. **Client-side prediction.** The local player is stepped immediately on
+   input. Predicted state is stored per-tick in a ring buffer.
 
-**Exit criteria:** `./build/server` builds and runs (even if it just ticks
-forever and logs tick count) on a box with no GL libraries.
+4. **Server reconciliation.** On receiving the server's ack of an input
+   tick, compare predicted state to authoritative state. If they differ
+   beyond a threshold, snap to authoritative and replay all pending
+   unacked inputs forward.
 
-### Then Phase 3 — Serialization & snapshots
+5. **Lag compensation.** For contact hits (push/shove in Sumo Arena),
+   rewind the server to the attacker's view-time and re-evaluate there.
 
-See [ROADMAP.md → Phase 3](ROADMAP.md#phase-3--serialization--snapshots) for
-the full checklist. High level:
+6. **Area of Interest (AoI).** Per-client entity subset. Critical for
+   scaling beyond ~32 entities without blowing the bandwidth budget.
 
-1. `engine::net::BitStream` + quantised types.
-2. Per-component `serialize` traits.
-3. Full-world snapshot encode/decode.
-4. Delta encoding with baseline-ack.
-5. `bench/` scaffold and first committed numbers in `bench/results.md`.
+**Milestone:** [Sumo Arena](SUMO_ARENA.md) MVP is playable and *feels
+good* at 0 / 50 / 100 / 150 ms RTT and 0 / 5 % loss.
 
-### What happened to "collision / AI / combat"?
+### Where `Connection` plugs in (sketch)
 
-Deferred. Those live inside the [Sumo Arena](SUMO_ARENA.md) testbed
-(`CollisionSystem`, `PhysicsSystem`, `DashSystem`, `ShoveSystem`) and land
-**after** the Engine/Client split and serialization, because there's no
-point building gameplay on the old coupled `Engine`.
+```cpp
+// Server per-tick:
+for (auto& [id, conn] : clients_) {
+    for (auto& pkt : socket.recvAll(id))
+        conn.receivePacket(pkt.data(), pkt.size(), now);
+    while (auto msg = conn.receive(ChannelId::ReliableUnordered))
+        applyInput(id, *msg);
+    if (conn.shouldSendNow(now)) {
+        conn.send(ChannelId::Unreliable, encodeDelta(id));
+        socket.send(id, conn.buildPacket(now));
+    }
+}
+```
 
 ---
 
@@ -265,19 +245,13 @@ point building gameplay on the old coupled `Engine`.
 
 ## ⚠️ Known drift / gotchas
 
-- `main` and `client` CMake targets build the same binary. Both get dropped /
-  merged during Phase 2.5; `client` becomes the real client, `server` appears.
-- `Engine` currently owns the GLFW window *and* the ECS world. Phase 2.5
-  splits this into a headless `Simulation` + `ClientApp`. **Do not** add new
-  features to `Engine` as-is — add them to `Simulation` after the split or
-  you'll be moving them twice.
-- `engine/platform/` currently only has `Renderer.h`. Sockets land in a
-  sibling `engine/net/` during Phase 4.
-- Input is read from GLFW directly inside `InputSystem`. After the split,
-  `InputSystem` should receive a `game::PlayerInput` *value* per tick so the
-  headless server can synthesise or replay inputs without GLFW.
+- `Fragmentation` (Phase 4d) is not yet wired into `Connection` / `ReliableChannel`.
+  Messages larger than ~1400 bytes should be split at the application level.
+  Wiring it in is a Phase 5 follow-up.
 - `PROJECT_STRUCTURE.md` describes the *target* structure (some items marked
   *(planned)*); this file is the truth for what's actually on disk.
+- `engine/net/` contains all the Phase 4 net primitives. Phase 5 will add
+  a replication layer (`engine/replication/`) on top of `Connection`.
 
 ---
 
